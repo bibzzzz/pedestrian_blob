@@ -86,16 +86,18 @@ if __name__ == '__main__':
 
     # sim settings
     expl_rate = 0.2
+    move_limit = math.inf
+    coord_range = 8
 
     # define simulation function (for parallelerization)
     def simulate(simulation):
         simulation.simulate()
 
     data_dir = os.path.dirname(os.path.realpath(__file__)) + '/sim_data/'
-    data_filepath = os.path.dirname(os.path.realpath(__file__)) + '/sim_data/%expl_rate, '
+    data_filepath = os.path.dirname(os.path.realpath(__file__)) + '/sim_data/%s_expl_rate_%s_move_limit_%s_coord_range' %(expl_rate, move_limit, coord_range)
 
     # create a fleet of simulations, and store them in a list
-    sims = [BlobSimulation(coord_range=4, move_limit=100, data_dir=data_dir, use_intel=0, expl_rate=expl_rate, move_type='manhattan', traffic='none') for x in range(0,n_simulations)]
+    sims = [BlobSimulation(coord_range=coord_range, move_limit=move_limit, data_dir=data_dir, use_intel=0, expl_rate=expl_rate, move_type='manhattan', traffic='none') for x in range(0,n_simulations)]
 
     # make the Pool of workers
     pool = ThreadPool(n_workers)
