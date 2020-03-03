@@ -6,6 +6,7 @@ import uuid
 import six.moves.cPickle as pickle
 import os
 import csv
+import glob
 from multiprocessing.dummy import Pool as ThreadPool
 from decision import calc_decision, execute_decision
 
@@ -18,7 +19,7 @@ class BlobSimulation():
 
     def __init__(self, coord_range, move_limit, data_dir, use_intel=0, expl_rate=0, move_type='manhattan', traffic='none'):
 
-        self.simID = str(uuid.uuid4())
+        self.simID = str(uuid.uuid4())[0:8]
         self.data_dir = data_dir
 
         self.use_intel = use_intel
@@ -44,18 +45,19 @@ class BlobSimulation():
             self.intel_version = 0
         else:
             # TODO: count number of matching files in intel dir
-            self.intel_version = 1
+            intel_filelist = glob.glob('/intel/%s_expl_rate_%s_move_limit_%s_coord_range_*.json' %(self.expl_rate, self.move_limit, self.coord_range))
+            self.intel_version = len(intel_filelist)
 
     def simulate(self):
 
         self.pre_decisionList = []
         self.post_decisionList = []
 
-        print('initializing simID %s: starting at (%s, %s) with target (%s, %s) and %s moves' %(self.simID, self.x, self.y, self.target_x, self.target_y, self.move_limit))
+        print('initializing simID %s: starting at (%s, %s) with target (%s, %s) and %s moves, using intel version %s' %(self.simID, self.x, self.y, self.target_x, self.target_y, self.move_limit, self.intel_version))
 
         while (self.n_moves < self.move_limit) and (self.sim_result == 0):
 
-            self.pre_decisionList.append([self.simID, 'pre', self.n_moves, self.x, self.y, self.target_x, self.target_y, self.coord_range])
+            self.pre_decisionList.append([self.simID, self.intel_version, 'pre', self.n_moves, self.x, self.y, self.target_x, self.target_y, self.coord_range])
 
             #print('calculating move %s...' %(self.n_moves))
             x_open = np.random.randint(0,2,1)[0]
@@ -66,7 +68,7 @@ class BlobSimulation():
             self.x, self.y = execute_decision(x=self.x, y=self.y, move_x=x_move, move_y=y_move)
 
             self.n_moves += 1
-            self.post_decisionList.append([self.simID, 'post',  self.n_moves, self.x, self.y, self.target_x, self.target_y, self.coord_range])
+            self.post_decisionList.append([self.simID, self.intel_version, 'post',  self.n_moves, self.x, self.y, self.target_x, self.target_y, self.coord_range])
 
             #print(self.x, self.y)
 
@@ -81,20 +83,21 @@ class BlobSimulation():
 if __name__ == '__main__':
 
     # processing settings
-    n_simulations = 10
+    n_simulations = 1
     n_workers = 4
 
     # sim settings
     expl_rate = 0.2
-    move_limit = math.inf
-    coord_range = 8
+    move_limit = 20
+    #move_limit = math.inf
+    coord_range = 4
 
     # define simulation function (for parallelerization)
     def simulate(simulation):
         simulation.simulate()
 
     data_dir = os.path.dirname(os.path.realpath(__file__)) + '/sim_data/'
-    data_filepath = os.path.dirname(os.path.realpath(__file__)) + '/sim_data/%s_expl_rate_%s_move_limit_%s_coord_range' %(expl_rate, move_limit, coord_range)
+    data_filepath = os.path.dirname(os.path.realpath(__file__)) + '/sim_data/%s_expl_rate_%s_move_limit_%s_coord_range_sim_data.csv' %(expl_rate, move_limit, coord_range)
 
     # create a fleet of simulations, and store them in a list
     sims = [BlobSimulation(coord_range=coord_range, move_limit=move_limit, data_dir=data_dir, use_intel=0, expl_rate=expl_rate, move_type='manhattan', traffic='none') for x in range(0,n_simulations)]
@@ -118,7 +121,7 @@ if __name__ == '__main__':
         if not os.path.exists(data_filepath):
             with open(data_filepath,'w') as f:
                 sim_output = csv.writer(f)
-                rowEntry = ['simID', 'decision_stage', 'n_moves', 'blob_x', 'blob_y', 'target_x', 'target_y', 'coord_range', 'sim_move_limit', 'sim_move_total', 'sim_result']
+                rowEntry = ['simID', 'intel_version', 'decision_stage', 'n_moves', 'blob_x', 'blob_y', 'target_x', 'target_y', 'coord_range', 'sim_move_limit', 'sim_move_total', 'sim_result']
                 sim_output.writerow(rowEntry)
         # open files for appending
         with open(data_filepath,'a') as f:
@@ -127,6 +130,11 @@ if __name__ == '__main__':
                 rowEntry = entry
                 rowEntry.extend([sim.move_limit, sim.n_moves, sim.sim_result])
                 sim_output.writerow(rowEntry)
+            for entry in sim.post_decisionList:
+                rowEntry = entry
+                rowEntry.extend([sim.move_limit, sim.n_moves, sim.sim_result])
+                sim_output.writerow(rowEntry)
+
             f.close()
 
 
