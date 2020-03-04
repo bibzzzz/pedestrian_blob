@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 import pandas as pd
 import itertools
 import math
@@ -9,6 +10,7 @@ import csv
 import glob
 from multiprocessing.dummy import Pool as ThreadPool
 from decision import calc_decision, execute_decision
+from intel import model_update
 
 
 class BlobSimulation():
@@ -45,8 +47,14 @@ class BlobSimulation():
             self.intel_version = 0
         else:
             # TODO: count number of matching files in intel dir
-            intel_filelist = glob.glob('/intel/%s_expl_rate_%s_move_limit_%s_coord_range_*.json' %(self.expl_rate, self.move_limit, self.coord_range))
+            intel_filelist = glob.glob('intel/%s_expl_rate_%s_move_limit_%s_coord_range_*model' %(self.expl_rate, self.move_limit, self.coord_range))
+            #print(intel_filelist)
             self.intel_version = len(intel_filelist)
+            if self.intel_version == 0:
+                self.use_intel = 0
+                self.model = 'none'
+            else:
+                self.model = tf.keras.models.load_model('./intel/%s_expl_rate_%s_move_limit_%s_coord_range_%s_version_model' %(self.expl_rate, self.move_limit, self.coord_range, self.intel_version))
 
     def simulate(self):
 
@@ -60,12 +68,18 @@ class BlobSimulation():
             self.pre_decisionList.append([self.simID, self.intel_version, 'pre', self.n_moves, self.x, self.y, self.target_x, self.target_y, self.coord_range])
 
             #print('calculating move %s...' %(self.n_moves))
-            x_open = np.random.randint(0,2,1)[0]
+            self.x_open = np.random.randint(0,2,1)[0]
 
-            (x_move, y_move) = calc_decision(x=self.x, y=self.y, target_x=self.target_x, target_y=self.target_y, x_open=x_open, coord_range=self.coord_range, move_type=self.move_type, traffic=self.traffic, use_intel=self.use_intel, intel_version=self.intel_version, expl_rate=self.expl_rate)
+            (self.x_move, self.y_move) = calc_decision(x=self.x, y=self.y, target_x=self.target_x,
+                                             target_y=self.target_y, x_open=self.x_open,
+                                             coord_range=self.coord_range, move_type=self.move_type,
+                                             traffic=self.traffic, use_intel=self.use_intel,
+                                             intel_version=self.intel_version,
+                                             expl_rate=self.expl_rate, move_limit=self.move_limit,
+                                             model=self.model)
 
             #print('executing move %s... x:%s, y:%s' %(self.n_moves, x_move, y_move))
-            self.x, self.y = execute_decision(x=self.x, y=self.y, move_x=x_move, move_y=y_move)
+            self.x, self.y = execute_decision(x=self.x, y=self.y, move_x=self.x_move, move_y=self.y_move)
 
             self.n_moves += 1
             self.post_decisionList.append([self.simID, self.intel_version, 'post',  self.n_moves, self.x, self.y, self.target_x, self.target_y, self.coord_range])
@@ -83,7 +97,7 @@ class BlobSimulation():
 if __name__ == '__main__':
 
     # processing settings
-    n_simulations = 1
+    n_simulations = 10
     n_workers = 4
 
     # sim settings
@@ -100,7 +114,7 @@ if __name__ == '__main__':
     data_filepath = os.path.dirname(os.path.realpath(__file__)) + '/sim_data/%s_expl_rate_%s_move_limit_%s_coord_range_sim_data.csv' %(expl_rate, move_limit, coord_range)
 
     # create a fleet of simulations, and store them in a list
-    sims = [BlobSimulation(coord_range=coord_range, move_limit=move_limit, data_dir=data_dir, use_intel=0, expl_rate=expl_rate, move_type='manhattan', traffic='none') for x in range(0,n_simulations)]
+    sims = [BlobSimulation(coord_range=coord_range, move_limit=move_limit, data_dir=data_dir, use_intel=1, expl_rate=expl_rate, move_type='manhattan', traffic='none') for x in range(0,n_simulations)]
 
     # make the Pool of workers
     pool = ThreadPool(n_workers)
@@ -136,5 +150,8 @@ if __name__ == '__main__':
                 sim_output.writerow(rowEntry)
 
             f.close()
+
+    model_update(expl_rate=expl_rate, move_limit=move_limit, coord_range=coord_range, batch_size=32,
+                 n_epochs=100, test_split=0.2, val_split=0.2, order_strategy='random')
 
 
