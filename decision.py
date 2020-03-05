@@ -35,11 +35,12 @@ def calc_decision(x, y, target_x, target_y, x_open, coord_range, move_type='manh
 
     xy_moves = list(itertools.product(x_moves, y_moves))
     xy_proj = list(itertools.product(x_proj, y_proj))
+    #print(xy_moves)
     #print(xy_proj)
 
     if use_intel==0:
         #pick random move from move list
-        proj_vec = np.zeros(len(xy_moves))
+        proj_vec = np.ones(len(xy_moves))
         #decision_index = np.random.randint(0, len(xy_moves), 1)[0]
     else:
         proj_dataframe = pd.DataFrame(xy_proj)
@@ -48,7 +49,7 @@ def calc_decision(x, y, target_x, target_y, x_open, coord_range, move_type='manh
         proj_dataframe['target_y'] = target_y
 
         proj_dataframe = proj_dataframe / coord_range
-        print(proj_dataframe.head(5))
+        #print(proj_dataframe.head(5))
        # proj_input = df_to_dataset(proj_dataframe)
         proj_input = tf.data.Dataset.from_tensor_slices(dict(proj_dataframe))
         proj_input = proj_input.batch(len(xy_proj))
@@ -59,14 +60,15 @@ def calc_decision(x, y, target_x, target_y, x_open, coord_range, move_type='manh
         #model = tf.keras.models.load_model('./intel/%s_expl_rate_%s_move_limit_%s_coord_range_%s_version_model' %(expl_rate, move_limit, coord_range, intel_version))
 
         #proj_vec = model.predict(proj_input)
-        proj_vec = np.array(model.predict_on_batch(proj_input)).flatten()
-        print(proj_vec)
+        proj_vec = np.array(model.predict_on_batch(proj_input), dtype=np.float32).flatten()
+        #print(proj_vec)
 
     rand_adj_vec = np.random.uniform(0, 1, len(xy_moves))
     #print(rand_adj_vec)
-    result_vec = proj_vec + (expl_rate)*rand_adj_vec
+    result_vec = (1-expl_rate)*proj_vec + (expl_rate)*proj_vec*rand_adj_vec
     #print(result_vec)
-    decision_index = np.argmax(result_vec)
+    #decision_index = np.argmax(result_vec)
+    decision_index = np.argmin(result_vec)
     #print(decision_index)
     (x_move, y_move) = xy_moves[decision_index]
     #print((x_move, y_move))

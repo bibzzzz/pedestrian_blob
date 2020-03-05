@@ -40,14 +40,23 @@ def load_data(filepath='./sim_data/0.2_expl_rate_20_move_limit_4_coord_range_sim
 
 # A utility method to create a tf.data dataset from a Pandas Dataframe
 def df_to_dataset(dataframe, shuffle=True, batch_size=32, input_cols=['blob_x', 'blob_y'],
-                  response_cols=['sim_result'], coord_range=4):
+                  response_cols=['sim_result'], coord_range=4, classification=True):
 
   dataframe = dataframe.copy()
-  output_data = dataframe[response_cols]
-  output_array = np.array(output_data)
+  if classification == True:
+      output_data = dataframe[response_cols]
+      output_array = np.array(output_data)
+  else:
+      output_data = dataframe[response_cols]
+      output_data['label'] = output_data.sim_move_total - output_data.n_moves
+      output_array = np.array(output_data.label, dtype=np.float32)
+      #print(output_data.label.head(5))
+      #print(output_array[:5])
+
+  # standardize input data
   input_data = dataframe[input_cols] / coord_range
 
-  print(input_data.head(5))
+  #print(input_data.head(5))
   #print(output_data.head(5))
 
   #ds = tf.data.Dataset.from_tensor_slices((dict(input_data), dict(output_data)))
@@ -59,22 +68,26 @@ def df_to_dataset(dataframe, shuffle=True, batch_size=32, input_cols=['blob_x', 
   return ds
 
 def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_epochs=5,
-                 test_split=0.2, val_split=0.2, order_strategy='random'):
+                 test_split=0.2, val_split=0.2, order_strategy='random',
+                 response_cols=['sim_result'], input_cols=['blob_x', 'blob_y', 'target_x',
+                                                           'target_y'], classification=True):
 
     sim_data_dir = './sim_data/'
-    input_cols = ['blob_x', 'blob_y', 'target_x', 'target_y']
-    response_cols = ['sim_result']
+    #input_cols = ['blob_x', 'blob_y', 'target_x', 'target_y']
+    #response_cols = ['sim_result']
 
     file_pattern = '%s_expl_rate_%s_move_limit_%s_coord_range_sim_data.csv' %(expl_rate, move_limit, coord_range)
 
-    train, val, test, intel_version = load_data(filepath=sim_data_dir+file_pattern, order_strategy=order_strategy, obs_limit=math.inf, test_split=test_split, val_split=val_split)
+    train, val, test, intel_version = load_data(filepath=sim_data_dir+file_pattern,
+                                                order_strategy=order_strategy, obs_limit=math.inf,
+                                                test_split=test_split, val_split=val_split)
 
     train_ds = df_to_dataset(train, batch_size=batch_size, input_cols=input_cols,
-                             response_cols=response_cols, coord_range=coord_range)
+                             response_cols=response_cols, coord_range=coord_range, classification=classification)
     val_ds = df_to_dataset(val, shuffle=False, batch_size=batch_size, input_cols=input_cols,
-                           response_cols=response_cols, coord_range=coord_range)
+                           response_cols=response_cols, coord_range=coord_range, classification=classification)
     test_ds = df_to_dataset(test, shuffle=False, batch_size=batch_size, input_cols=input_cols,
-                            response_cols=response_cols, coord_range=coord_range)
+                            response_cols=response_cols, coord_range=coord_range, classification=classification)
 
     feature_columns = []
     for header in input_cols:
@@ -96,16 +109,19 @@ def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_e
     model = tf.keras.Sequential([
             #tf.keras.layers.Dense(len(input_cols), kernel_regularizer=tf.keras.regularizers.l2(0.001), activation=tf.nn.relu, use_bias=True),
             feature_layer,
-            tf.keras.layers.Dense(120, kernel_regularizer=tf.keras.regularizers.l2(0.00001),
-                         activation=tf.keras.activations.tanh),
-            tf.keras.layers.Dense(80, kernel_regularizer=tf.keras.regularizers.l2(0.00001),
-                                  activation=tf.keras.activations.relu, use_bias=True),
-            tf.keras.layers.Dense(len(response_cols), activation=tf.nn.sigmoid)
+            tf.keras.layers.Dense(10, kernel_regularizer=tf.keras.regularizers.l2(0.00001), activation='relu'),
+            tf.keras.layers.Dense(10, kernel_regularizer=tf.keras.regularizers.l2(0.00001), activation='relu', use_bias=True),
+            #tf.keras.layers.Dense(1, activation='sigmoid')
+            tf.keras.layers.Dropout(0.5),
+            tf.keras.layers.Dense(1)
     ])
 
-    model.compile(optimizer='adam',
-              loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
-              metrics=['accuracy'])
+    #model.compile(tf.keras.optimizers.Adam(lr=1e-3),
+    model.compile(tf.keras.optimizers.RMSprop(lr=1e-3),
+              #loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
+              loss=tf.keras.losses.MeanSquaredError(),
+              #metrics=['accuracy'])
+              metrics=['mae', 'mse'])
 
     #model.fit(train_ds,
     #      validation_data=val_ds,
@@ -114,8 +130,10 @@ def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_e
     print('commencing version %s update...' %(intel_version))
     model.fit(train_ds, validation_data=val_ds, epochs=n_epochs, callbacks=[earlyStopping, mcp_save, reduce_lr_loss])
 
-    loss, accuracy = model.evaluate(test_ds)
-    print("Accuracy", accuracy)
+    #loss, accuracy = model.evaluate(test_ds)
+    loss, mae, mse = model.evaluate(test_ds)
+    #print("Accuracy", accuracy)
+    print("MAE, MSE:", mae, mse)
 
     # save model object
     tf.keras.models.save_model(model, './intel/%s_expl_rate_%s_move_limit_%s_coord_range_%s_version_model'
@@ -125,5 +143,6 @@ def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_e
 
 if __name__ == '__main__':
 
-    model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32,
-                 n_epochs=100, test_split=0.2, val_split=0.2, order_strategy='random')
+    model_update(expl_rate=0.2, move_limit=math.inf, coord_range=4, batch_size=32, n_epochs=150,
+                 test_split=0.2, val_split=0.2, order_strategy='random',
+                 response_cols=['sim_move_total', 'n_moves'], classification=False)
