@@ -12,12 +12,15 @@ from tensorflow.keras import layers
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
+import pickle
+
 
 
 def load_data(filepath='./sim_data/0.2_expl_rate_20_move_limit_4_coord_range_sim_data.csv',
               val_split=0.2, test_split=0.2, version_lower_cutoff=0, version_upper_cutoff=math.inf, obs_limit=100, order_strategy='random'):
 
     dataframe = pd.read_csv(filepath)
+    dataframe = dataframe[dataframe.decision_stage=='pre']
     dataframe = dataframe[(dataframe.intel_version>=version_lower_cutoff) & (dataframe.intel_version<=version_upper_cutoff)]
 
     intel_version = max(dataframe.intel_version) + 1
@@ -76,9 +79,18 @@ def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_e
     #input_cols = ['blob_x', 'blob_y', 'target_x', 'target_y']
     #response_cols = ['sim_result']
 
-    file_pattern = '%s_expl_rate_%s_move_limit_%s_coord_range_sim_data.csv' %(expl_rate, move_limit, coord_range)
+    file_pattern = '%s_expl_rate_%s_move_limit_%s_coord_range' %(expl_rate, move_limit, coord_range)
 
-    train, val, test, intel_version = load_data(filepath=sim_data_dir+file_pattern,
+    # load existing best intel result
+    if os.path.exists('./intel/%s.best.pickle' %(file_pattern)):
+        with open('./intel/%s.best.pickle' %(file_pattern), 'rb') as f:
+            persist_best_score = pickle.load(f)
+            #chkpt_cb.best = best
+            print('existing intel found with best loss score of %s...' %(persist_best_score))
+    else:
+        print('no existing intel found...')
+
+    train, val, test, intel_version = load_data(filepath=sim_data_dir+file_pattern+'_sim_data.csv',
                                                 order_strategy=order_strategy, obs_limit=math.inf,
                                                 test_split=test_split, val_split=val_split)
 
@@ -135,9 +147,13 @@ def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_e
     #print("Accuracy", accuracy)
     print("MAE, MSE:", mae, mse)
 
-    # save model object
-    tf.keras.models.save_model(model, './intel/%s_expl_rate_%s_move_limit_%s_coord_range_%s_version_model'
-               %(expl_rate, move_limit, coord_range, intel_version))
+    if mcp_save.best >= persist_best_score:
+        # store new best score
+        with open('./intel/%s.best.pickle' %(file_pattern), 'wb') as f:
+            pickle.dump(mcp_save.best, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+        # save model object
+        tf.keras.models.save_model(model, './intel/%s_expl_rate_%s_move_limit_%s_coord_range_%s_version_model' %(expl_rate, move_limit, coord_range, intel_version))
 
 
 
