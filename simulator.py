@@ -20,10 +20,10 @@ class BlobSimulation():
     '''
 
     def __init__(self, batchID, coord_range, move_limit, data_dir, use_intel=0, expl_rate=0,
-                 move_type='manhattan', traffic='none', print_freq=100, intel_move_limit=math.inf):
+                 move_type='manhattan', traffic='none', print_freq=200, intel_move_limit=math.inf):
 
-        self.batchID = batchID
-        self.simID = str(uuid.uuid4())[0:8]
+        #self.batchID = batchID
+        self.simID = '%s-%s' %(str(uuid.uuid4())[0:8], batchID)
         self.data_dir = data_dir
         self.print_freq = print_freq
 
@@ -64,12 +64,17 @@ class BlobSimulation():
 
         self.pre_decisionList = []
         self.post_decisionList = []
+        self.decision_history = []
 
         print('initializing simID %s: starting at (%s, %s) with target (%s, %s) and %s moves, using intel version %s' %(self.simID, self.x, self.y, self.target_x, self.target_y, self.move_limit, self.intel_version))
 
         while (self.n_moves < self.move_limit) and (self.sim_result == 0):
 
-            if (self.use_intel == 1) and (self.n_moves > self.intel_move_limit):
+            #print(self.decision_history[-10:])
+            #print(set(self.decision_history[-10:]))
+
+            #if (self.use_intel == 1) and (self.n_moves > self.intel_move_limit):
+            if (len(self.decision_history) >= self.intel_move_limit) and (len(set(self.decision_history[-self.intel_move_limit:])) == 1):
                 self.use_intel = 0
                 print('simID %s shutting off intel...' %(self.simID))
 
@@ -85,6 +90,8 @@ class BlobSimulation():
                                              intel_version=self.intel_version,
                                              expl_rate=self.expl_rate, move_limit=self.move_limit,
                                              model=self.model)
+
+            self.decision_history.append((self.x_move, self.y_move))
 
             #print('executing move %s... x:%s, y:%s' %(self.n_moves, x_move, y_move))
             self.x, self.y = execute_decision(x=self.x, y=self.y, move_x=self.x_move, move_y=self.y_move)
@@ -107,7 +114,7 @@ if __name__ == '__main__':
 
     # processing settings
     n_simulations = 100
-    n_workers = 6
+    n_workers = 4
 
     # sim settings
     expl_rate = 0.2
@@ -123,7 +130,9 @@ if __name__ == '__main__':
     data_filepath = os.path.dirname(os.path.realpath(__file__)) + '/sim_data/%s_expl_rate_%s_move_limit_%s_coord_range_sim_data.csv' %(expl_rate, move_limit, coord_range)
 
     # create a fleet of simulations, and store them in a list
-    sims = [BlobSimulation(batchID=x, coord_range=coord_range, move_limit=move_limit, data_dir=data_dir, use_intel=1, expl_rate=expl_rate, move_type='manhattan', traffic='none', intel_move_limit = 1000) for x in range(0,n_simulations)]
+    sims = [BlobSimulation(batchID=x, coord_range=coord_range, move_limit=move_limit,
+                           data_dir=data_dir, use_intel=1, expl_rate=expl_rate,
+                           move_type='manhattan', traffic='none', intel_move_limit = 10) for x in range(0,n_simulations)]
 
     # make the Pool of workers
     pool = ThreadPool(n_workers)
@@ -161,7 +170,8 @@ if __name__ == '__main__':
             f.close()
 
     model_update(expl_rate=expl_rate, move_limit=move_limit, coord_range=coord_range, batch_size=32,
-                 n_epochs=200, test_split=0.2, val_split=0.2, order_strategy='random',
-                 response_cols=['sim_move_total', 'n_moves'], classification=False)
+                 n_epochs=2000, test_split=0.2, val_split=0.2, order_strategy='random',
+                 response_cols=['sim_move_total', 'n_moves'], classification=False,
+                 version_lookback=0)
 
 

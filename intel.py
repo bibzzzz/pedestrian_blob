@@ -17,13 +17,15 @@ import pickle
 
 
 def load_data(filepath='./sim_data/0.2_expl_rate_20_move_limit_4_coord_range_sim_data.csv',
-              val_split=0.2, test_split=0.2, version_lower_cutoff=0, version_upper_cutoff=math.inf, obs_limit=100, order_strategy='random'):
+              val_split=0.2, test_split=0.2, version_lookback=math.inf, version_upper_cutoff=math.inf, obs_limit=100, order_strategy='random'):
 
     dataframe = pd.read_csv(filepath)
     dataframe = dataframe[dataframe.decision_stage=='pre']
+    intel_version = max(dataframe.intel_version) + 1
+    version_lower_cutoff = intel_version - 1 - version_lookback
+
     dataframe = dataframe[(dataframe.intel_version>=version_lower_cutoff) & (dataframe.intel_version<=version_upper_cutoff)]
 
-    intel_version = max(dataframe.intel_version) + 1
 
     if order_strategy == 'random':
         if obs_limit >= len(dataframe):
@@ -70,10 +72,7 @@ def df_to_dataset(dataframe, shuffle=True, batch_size=32, input_cols=['blob_x', 
   ds = ds.batch(batch_size)
   return ds
 
-def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_epochs=5,
-                 test_split=0.2, val_split=0.2, order_strategy='random',
-                 response_cols=['sim_result'], input_cols=['blob_x', 'blob_y', 'target_x',
-                                                           'target_y'], classification=True):
+def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_epochs=5, test_split=0.2, val_split=0.2, order_strategy='random', response_cols=['sim_result'], input_cols=['blob_x', 'blob_y', 'target_x', 'target_y'], classification=True, version_lookback=math.inf):
 
     sim_data_dir = './sim_data/'
     #input_cols = ['blob_x', 'blob_y', 'target_x', 'target_y']
@@ -89,10 +88,12 @@ def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_e
             print('existing intel found with best loss score of %s...' %(persist_best_score))
     else:
         print('no existing intel found...')
+        persist_best_score = math.inf
 
     train, val, test, intel_version = load_data(filepath=sim_data_dir+file_pattern+'_sim_data.csv',
                                                 order_strategy=order_strategy, obs_limit=math.inf,
-                                                test_split=test_split, val_split=val_split)
+                                                test_split=test_split, val_split=val_split,
+                                                version_lookback=version_lookback)
 
     train_ds = df_to_dataset(train, batch_size=batch_size, input_cols=input_cols,
                              response_cols=response_cols, coord_range=coord_range, classification=classification)
@@ -147,7 +148,8 @@ def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_e
     #print("Accuracy", accuracy)
     print("MAE, MSE:", mae, mse)
 
-    if mcp_save.best >= persist_best_score:
+    persist_best_score = math.inf #TODO: control always save mechanism
+    if mcp_save.best <= persist_best_score:
         # store new best score
         with open('./intel/%s.best.pickle' %(file_pattern), 'wb') as f:
             pickle.dump(mcp_save.best, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -161,4 +163,5 @@ if __name__ == '__main__':
 
     model_update(expl_rate=0.2, move_limit=math.inf, coord_range=4, batch_size=32, n_epochs=150,
                  test_split=0.2, val_split=0.2, order_strategy='random',
-                 response_cols=['sim_move_total', 'n_moves'], classification=False)
+                 response_cols=['sim_move_total', 'n_moves'], classification=False,
+                 version_lookback=0)
