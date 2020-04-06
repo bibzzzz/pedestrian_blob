@@ -6,7 +6,7 @@ library(ggplot2)
 
 # library(plyr)
 
-n_obs <- 25
+n_obs <- 56
 n_moves <- 'inf'
 coord_range <- 4
 expl_rate <- 0.2
@@ -23,7 +23,8 @@ blob_data <- subset(blob_data, ((decision_stage=='pre'&n_moves==0)|decision_stag
 # sim_setID_filter <- 1
 sim_set <- unique(blob_data$simID)[sample(1:length(unique(blob_data$simID)), length(unique(blob_data$simID)), replace = FALSE)][1:n_obs]
 plot_data <- subset(blob_data, simID%in%sim_set)
-
+# plot_data <- plot_data[order(plot_data$intel_version, plot_data$simID, plot_data$n_moves)]
+# plot_data <- subset(blob_data, intel_version==3)
 
 plot <- ggplot(data = subset(plot_data), aes(x=blob_x, y=blob_y, group=interaction(simID), colour=factor(intel_version))) +
 # plot <- ggplot(data = subset(plot_data, decision_stage='post'), aes(x=sim_blob_x, y=sim_blob_y, group=interaction(simID), colour=sim_n_moves)) +
@@ -34,7 +35,7 @@ plot <- ggplot(data = subset(plot_data), aes(x=blob_x, y=blob_y, group=interacti
 
   xlim(c(-coord_range, coord_range)) +
   ylim(c(-coord_range, coord_range)) +
-  facet_wrap(~simID*intel_version) +
+  facet_wrap(~intel_version*simID) +
   theme(
         # axis.line=element_blank(),
         axis.text.x=element_blank(),
@@ -52,10 +53,16 @@ plot <- ggplot(data = subset(plot_data), aes(x=blob_x, y=blob_y, group=interacti
 
 plot
 
+aggregate(n_moves~intel_version, blob_data, FUN="mean")
+aggregate(n_moves~intel_version, blob_data, FUN="median")
+count(blob_data, "intel_version")
+
 summary(subset(blob_data, intel_version==0))
 summary(subset(blob_data, intel_version==1))
 summary(subset(blob_data, intel_version==2))
 summary(subset(blob_data, intel_version==3))
 summary(subset(blob_data, intel_version==4))
+summary(subset(blob_data, intel_version==5))
+summary(subset(blob_data, intel_version==6))
 
 subset(plot_data, simID=="cad60f9d")

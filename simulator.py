@@ -20,7 +20,8 @@ class BlobSimulation():
     '''
 
     def __init__(self, batchID, coord_range, move_limit, data_dir, use_intel=0, expl_rate=0,
-                 move_type='manhattan', traffic='none', print_freq=200, intel_move_limit=math.inf):
+                 move_type='manhattan', traffic='none', print_freq=200, intel_move_limit=math.inf,
+                 intel_version=None):
 
         #self.batchID = batchID
         self.simID = '%s-%s' %(str(uuid.uuid4())[0:8], batchID)
@@ -50,10 +51,13 @@ class BlobSimulation():
         if self.use_intel == 0:
             self.intel_version = 0
         else:
-            # TODO: count number of matching files in intel dir
-            intel_filelist = glob.glob('intel/%s_expl_rate_%s_move_limit_%s_coord_range_*model' %(self.expl_rate, self.move_limit, self.coord_range))
-            #print(intel_filelist)
-            self.intel_version = len(intel_filelist)
+            if intel_version==None:
+                # TODO: count number of matching files in intel dir
+                intel_filelist = glob.glob('intel/%s_expl_rate_%s_move_limit_%s_coord_range_*model' %(self.expl_rate, self.move_limit, self.coord_range))
+                #print(intel_filelist)
+                self.intel_version = len(intel_filelist)
+            else:
+                self.intel_version = intel_version
             if self.intel_version == 0:
                 self.use_intel = 0
                 self.model = 'none'
@@ -73,8 +77,8 @@ class BlobSimulation():
             #print(self.decision_history[-10:])
             #print(set(self.decision_history[-10:]))
 
-            #if (self.use_intel == 1) and (self.n_moves > self.intel_move_limit):
-            if (len(self.decision_history) >= self.intel_move_limit) and (len(set(self.decision_history[-self.intel_move_limit:])) == 1):
+            if (self.use_intel == 1) and (self.n_moves > self.intel_move_limit):
+            #if (len(self.decision_history) >= self.intel_move_limit) and (len(set(self.decision_history[-self.intel_move_limit:])) == 1):
                 self.use_intel = 0
                 print('simID %s shutting off intel...' %(self.simID))
 
@@ -113,7 +117,7 @@ class BlobSimulation():
 if __name__ == '__main__':
 
     # processing settings
-    n_simulations = 100
+    n_simulations = 1000
     n_workers = 4
 
     # sim settings
@@ -121,6 +125,7 @@ if __name__ == '__main__':
     #move_limit = 20
     move_limit = math.inf
     coord_range = 4
+    intel_version = None
 
     # define simulation function (for parallelerization)
     def simulate(simulation):
@@ -132,7 +137,8 @@ if __name__ == '__main__':
     # create a fleet of simulations, and store them in a list
     sims = [BlobSimulation(batchID=x, coord_range=coord_range, move_limit=move_limit,
                            data_dir=data_dir, use_intel=1, expl_rate=expl_rate,
-                           move_type='manhattan', traffic='none', intel_move_limit = 10) for x in range(0,n_simulations)]
+                           move_type='manhattan', traffic='none', intel_move_limit = 100,
+                           intel_version=intel_version) for x in range(0,n_simulations)]
 
     # make the Pool of workers
     pool = ThreadPool(n_workers)

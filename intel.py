@@ -90,6 +90,7 @@ def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_e
         print('no existing intel found...')
         persist_best_score = math.inf
 
+    persist_best_score = math.inf
     train, val, test, intel_version = load_data(filepath=sim_data_dir+file_pattern+'_sim_data.csv',
                                                 order_strategy=order_strategy, obs_limit=math.inf,
                                                 test_split=test_split, val_split=val_split,
@@ -161,7 +162,4 @@ def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_e
 
 if __name__ == '__main__':
 
-    model_update(expl_rate=0.2, move_limit=math.inf, coord_range=4, batch_size=32, n_epochs=150,
-                 test_split=0.2, val_split=0.2, order_strategy='random',
-                 response_cols=['sim_move_total', 'n_moves'], classification=False,
-                 version_lookback=0)
+    model_update(expl_rate=0.2, move_limit=math.inf, coord_range=4, batch_size=32, n_epochs=2000, test_split=0.2, val_split=0.2, order_strategy='random', response_cols=['sim_move_total', 'n_moves'], classification=False, version_lookback=0)
