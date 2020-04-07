@@ -117,7 +117,7 @@ class BlobSimulation():
 if __name__ == '__main__':
 
     # processing settings
-    n_simulations = 1000
+    n_simulations = 20
     n_workers = 4
 
     # sim settings
@@ -176,8 +176,6 @@ if __name__ == '__main__':
             f.close()
 
     model_update(expl_rate=expl_rate, move_limit=move_limit, coord_range=coord_range, batch_size=32,
-                 n_epochs=2000, test_split=0.2, val_split=0.2, order_strategy='random',
+                 n_epochs=200, test_split=0.2, val_split=0.2, order_strategy='random',
                  response_cols=['sim_move_total', 'n_moves'], classification=False,
-                 version_lookback=0)
-
-
+                 version_lookback=math.inf)

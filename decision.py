@@ -51,8 +51,11 @@ def calc_decision(x, y, target_x, target_y, x_open, coord_range, move_type='manh
         proj_dataframe = proj_dataframe / coord_range
         #print(proj_dataframe.head(5))
        # proj_input = df_to_dataset(proj_dataframe)
-        proj_input = tf.data.Dataset.from_tensor_slices(dict(proj_dataframe))
-        proj_input = proj_input.batch(len(xy_proj))
+        #proj_input = tf.data.Dataset.from_tensor_slices(dict(proj_dataframe))
+        #proj_input = proj_input.batch(len(xy_proj))
+
+        proj_input = np.array(proj_dataframe)
+
         #proj_input = np.array(proj_dataframe)
         #for features_tensor in proj_input:
         #    print(f'features:{features_tensor}')
