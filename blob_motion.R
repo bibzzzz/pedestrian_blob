@@ -3,10 +3,9 @@ gc()
 
 library(data.table)
 library(ggplot2)
+library(plyr)
 
-# library(plyr)
-
-n_obs <- 56
+n_obs <- 81
 n_moves <- 'inf'
 coord_range <- 4
 expl_rate <- 0.2
@@ -18,6 +17,7 @@ blob_data <- read.csv(blob_data_path)
 blob_data <- data.table(blob_data)
 
 blob_data <- subset(blob_data, ((decision_stage=='pre'&n_moves==0)|decision_stage=='post'))
+# blob_data <- subset(blob_data, intel_version==7)
 
 # simID_filter <- '4e462af5-2007-4387-a568-bc7b6798442c'
 # sim_setID_filter <- 1
@@ -63,6 +63,6 @@ summary(subset(blob_data, intel_version==2))
 summary(subset(blob_data, intel_version==3))
 summary(subset(blob_data, intel_version==4))
 summary(subset(blob_data, intel_version==5))
-summary(subset(blob_data, intel_version==6))
+summary(subset(blob_data, intel_version==7))
 
 subset(plot_data, simID=="cad60f9d")

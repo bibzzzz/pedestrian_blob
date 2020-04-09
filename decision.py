@@ -20,11 +20,13 @@ def calc_decision(x, y, target_x, target_y, x_open, coord_range, move_type='manh
                   model='none'):
 
     if x_open==1:
-        x_moves = [-1, 0, 1]
+        #x_moves = [-1, 0, 1]
+        x_moves = [-1, 1]
         y_moves = [0]
     else:
         x_moves = [0]
-        y_moves = [-1, 0, 1]
+        #y_moves = [-1, 0, 1]
+        y_moves = [-1, 1]
 
     x_moves = [i for i in x_moves if abs(i + x) <= coord_range]
     y_moves = [i for i in y_moves if abs(i + y) <= coord_range]
@@ -55,6 +57,7 @@ def calc_decision(x, y, target_x, target_y, x_open, coord_range, move_type='manh
         #proj_input = proj_input.batch(len(xy_proj))
 
         proj_input = np.array(proj_dataframe)
+        #print(proj_input)
 
         #proj_input = np.array(proj_dataframe)
         #for features_tensor in proj_input:
@@ -63,7 +66,8 @@ def calc_decision(x, y, target_x, target_y, x_open, coord_range, move_type='manh
         #model = tf.keras.models.load_model('./intel/%s_expl_rate_%s_move_limit_%s_coord_range_%s_version_model' %(expl_rate, move_limit, coord_range, intel_version))
 
         #proj_vec = model.predict(proj_input)
-        proj_vec = np.array(model.predict_on_batch(proj_input), dtype=np.float32).flatten()
+        #proj_vec = np.array(model.predict_on_batch(proj_input), dtype=np.float32).flatten()
+        proj_vec = np.array(model.predict(proj_input), dtype=np.float32).flatten()
         #print(proj_vec)
 
     rand_adj_vec = np.random.uniform(0, 1, len(xy_moves))

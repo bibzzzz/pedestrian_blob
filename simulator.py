@@ -117,14 +117,16 @@ class BlobSimulation():
 if __name__ == '__main__':
 
     # processing settings
-    n_simulations = 20
+    n_simulations = 40
     n_workers = 4
 
+    target_n_obs = 30000
+
     # sim settings
-    expl_rate = 0.2
+    expl_rate = 0.1
     #move_limit = 20
     move_limit = math.inf
-    coord_range = 4
+    coord_range = 5
     intel_version = None
 
     # define simulation function (for parallelerization)
@@ -134,48 +136,65 @@ if __name__ == '__main__':
     data_dir = os.path.dirname(os.path.realpath(__file__)) + '/sim_data/'
     data_filepath = os.path.dirname(os.path.realpath(__file__)) + '/sim_data/%s_expl_rate_%s_move_limit_%s_coord_range_sim_data.csv' %(expl_rate, move_limit, coord_range)
 
-    # create a fleet of simulations, and store them in a list
-    sims = [BlobSimulation(batchID=x, coord_range=coord_range, move_limit=move_limit,
-                           data_dir=data_dir, use_intel=1, expl_rate=expl_rate,
-                           move_type='manhattan', traffic='none', intel_move_limit = 100,
-                           intel_version=intel_version) for x in range(0,n_simulations)]
+    # loop simulate
+    version_n_obs = 0
+    sim_counter = 0
+    sim_multiple = n_simulations
+    while version_n_obs <= target_n_obs:
+        # create a fleet of simulations, and store them in a list
+        sims = [BlobSimulation(batchID=x, coord_range=coord_range, move_limit=move_limit,
+                               data_dir=data_dir, use_intel=1, expl_rate=expl_rate,
+                               move_type='manhattan', traffic='none', intel_move_limit = 100,
+                               intel_version=intel_version) for x in range(0, n_simulations)]
 
-    # make the Pool of workers
-    pool = ThreadPool(n_workers)
+        # make the Pool of workers
+        pool = ThreadPool(n_workers)
 
-    # threaded simulation
-    results = pool.map(simulate, sims)
+        # threaded simulation
+        results = pool.map(simulate, sims)
 
-    #close the pool and wait for the work to finish
-    pool.close()
-    pool.join()
+        #close the pool and wait for the work to finish
+        pool.close()
+        pool.join()
 
-    # store results
-    # specify filepaths
+        # store results
+        for sim in sims:
 
-    for sim in sims:
-
-        # if output file doesnt exist create it
-        if not os.path.exists(data_filepath):
-            with open(data_filepath,'w') as f:
+            # if output file doesnt exist create it
+            if not os.path.exists(data_filepath):
+                with open(data_filepath,'w') as f:
+                    sim_output = csv.writer(f)
+                    rowEntry = ['simID', 'intel_version', 'decision_stage', 'n_moves', 'blob_x', 'blob_y', 'target_x', 'target_y', 'coord_range', 'sim_move_limit', 'sim_move_total', 'sim_result']
+                    sim_output.writerow(rowEntry)
+            # open files for appending
+            with open(data_filepath,'a') as f:
                 sim_output = csv.writer(f)
-                rowEntry = ['simID', 'intel_version', 'decision_stage', 'n_moves', 'blob_x', 'blob_y', 'target_x', 'target_y', 'coord_range', 'sim_move_limit', 'sim_move_total', 'sim_result']
-                sim_output.writerow(rowEntry)
-        # open files for appending
-        with open(data_filepath,'a') as f:
-            sim_output = csv.writer(f)
-            for entry in sim.pre_decisionList:
-                rowEntry = entry
-                rowEntry.extend([sim.move_limit, sim.n_moves, sim.sim_result])
-                sim_output.writerow(rowEntry)
-            for entry in sim.post_decisionList:
-                rowEntry = entry
-                rowEntry.extend([sim.move_limit, sim.n_moves, sim.sim_result])
-                sim_output.writerow(rowEntry)
+                for entry in sim.pre_decisionList:
+                    rowEntry = entry
+                    rowEntry.extend([sim.move_limit, sim.n_moves, sim.sim_result])
+                    sim_output.writerow(rowEntry)
+                for entry in sim.post_decisionList:
+                    rowEntry = entry
+                    rowEntry.extend([sim.move_limit, sim.n_moves, sim.sim_result])
+                    sim_output.writerow(rowEntry)
 
-            f.close()
+                f.close()
 
+        # extra simulations
+        sim_data = pd.read_csv(data_filepath)
+        sim_data = sim_data[sim_data.decision_stage=='pre']
+        current_version = max(sim_data.intel_version)
+        version_n_obs = len(sim_data[sim_data.intel_version==current_version])
+        n_obs_gap = target_n_obs - version_n_obs
+
+        sim_counter += n_simulations
+
+        n_simulations = min(np.int(n_obs_gap / sim_counter), sim_multiple)
+        print('running %s extra simulations for intel version %s' %(n_simulations, current_version))
+
+    # train new model on new experience
+    print('commencing model update procecedure...')
     model_update(expl_rate=expl_rate, move_limit=move_limit, coord_range=coord_range, batch_size=32,
-                 n_epochs=200, test_split=0.2, val_split=0.2, order_strategy='random',
-                 response_cols=['sim_move_total', 'n_moves'], classification=False,
-                 version_lookback=math.inf)
+             n_epochs=500, test_split=0.2, val_split=0.2, order_strategy='random',
+             response_cols=['sim_move_total', 'n_moves'], classification=False,
+             version_lookback=math.inf)

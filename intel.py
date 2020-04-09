@@ -22,9 +22,9 @@ def load_data(filepath='./sim_data/0.2_expl_rate_20_move_limit_4_coord_range_sim
     dataframe = pd.read_csv(filepath)
     dataframe = dataframe[dataframe.decision_stage=='pre']
     intel_version = max(dataframe.intel_version) + 1
-    version_lower_cutoff = intel_version - 1 - version_lookback
+    #version_lower_cutoff = intel_version - 1 - version_lookback
 
-    dataframe = dataframe[(dataframe.intel_version>=version_lower_cutoff) & (dataframe.intel_version<=version_upper_cutoff)]
+    #dataframe = dataframe[(dataframe.intel_version>=version_lower_cutoff) & (dataframe.intel_version<=version_upper_cutoff)]
 
 
     if order_strategy == 'random':
@@ -97,14 +97,13 @@ def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_e
                                                 test_split=test_split, val_split=val_split,
                                                 version_lookback=version_lookback)
 
-    # load stored intel version
-    if os.path.exists('./intel/%s.intel_version.pickle' %(file_pattern)):
-        with open('./intel/%s.intel_version.pickle' %(file_pattern), 'rb') as f:
-            intel_version = pickle.load(f)
-        print('working with intel version %s...' %(intel_version))
+    ## load stored intel version
+    #if os.path.exists('./intel/%s.intel_version.pickle' %(file_pattern)):
+    #    with open('./intel/%s.intel_version.pickle' %(file_pattern), 'rb') as f:
+    #        intel_version = pickle.load(f)
+    #    print('working with intel version %s...' %(intel_version))
 
-    if intel_version > 1:
-        train = train[train.intel_version==intel_version - 1]
+    train = train[train.intel_version==(intel_version - 1)]
 
     train_ds, train_input, train_output = df_to_dataset(train, batch_size=batch_size, input_cols=input_cols,
                              response_cols=response_cols, coord_range=coord_range, classification=classification)
@@ -114,9 +113,9 @@ def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_e
                             response_cols=response_cols, coord_range=coord_range, classification=classification)
 
     # training parameters
-    earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, verbose=0, mode='min')
+    earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=50, mode='min')
     mcp_save = tf.keras.callbacks.ModelCheckpoint('./intel/%s_expl_rate_%s_move_limit_%s_coord_range_%s_version_model_weights.h5' %(expl_rate, move_limit, coord_range, intel_version), save_best_only=True, monitor='val_loss', mode='min')
-    reduce_lr_loss = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5, verbose=1, mode='min')
+    reduce_lr_loss = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=25, mode='min')
 
     feature_columns = []
     for header in input_cols:
@@ -124,6 +123,7 @@ def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_e
     feature_layer = layers.DenseFeatures(feature_columns)
 
 
+    print('commencing version %s update...' %(intel_version))
     if intel_version == 1:
 
         #model = tf.keras.Sequential([
@@ -155,15 +155,19 @@ def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_e
         #      validation_data=val_ds,
         #      epochs=n_epochs)
 
-        print('commencing version %s update...' %(intel_version))
-        model.fit(train_input, train_output, validation_data=(val_input, val_output), epochs=n_epochs, callbacks=[earlyStopping, mcp_save, reduce_lr_loss])
+        model.fit(train_input, train_output, validation_data=(val_input, val_output),
+                  epochs=n_epochs, callbacks=[earlyStopping, mcp_save, reduce_lr_loss])
 
     else:
-        model = tf.keras.models.load_model('./intel/%s_expl_rate_%s_move_limit_%s_coord_range_%s_version_model' %(expl_rate, move_limit, coord_range, intel_version))
-        model.fit(train_input, train_output, epochs = n_epochs, validation_data = (val_input, val_output), verbose=1)
+        model = tf.keras.models.load_model('./intel/%s_expl_rate_%s_move_limit_%s_coord_range_%s_version_model'%(expl_rate, move_limit, coord_range, (intel_version - 1)))
+        model.compile(tf.keras.optimizers.Adam(lr=1e-3),
+                  loss=tf.keras.losses.MeanSquaredError(),
+                  #metrics=['accuracy'])
+                  metrics=['mae', 'mse'])
+        model.fit(train_input, train_output, epochs = n_epochs, validation_data = (val_input, val_output))
 
     #loss, accuracy = model.evaluate(test_ds)
-    loss, mae, mse = model.evaluate(test_input, test_output, batch_size=batch_size)
+    loss, mae, mse = model.evaluate(test_input, test_output, batch_size=batch_size, verbose=0)
     #print("Accuracy", accuracy)
     print("MAE, MSE:", mae, mse)
 
@@ -182,4 +186,7 @@ def model_update(expl_rate=0.2, move_limit=20, coord_range=4, batch_size=32, n_e
 
 if __name__ == '__main__':
 
-    model_update(expl_rate=0.2, move_limit=math.inf, coord_range=4, batch_size=32, n_epochs=10, test_split=0.2, val_split=0.2, order_strategy='random', response_cols=['sim_move_total', 'n_moves'], classification=False, version_lookback=math.inf)
+    model_update(expl_rate=0.1, move_limit=math.inf, coord_range=5, batch_size=32,
+             n_epochs=1500, test_split=0.2, val_split=0.2, order_strategy='random',
+             response_cols=['sim_move_total', 'n_moves'], classification=False,
+             version_lookback=math.inf)
